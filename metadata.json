@@ -1,0 +1,5 @@
+{
+  "name": "laravel-nocodb",
+  "description": "Eloquent driver for NocoDB REST API integration in Laravel.",
+  "requestFramePermissions": []
+}
