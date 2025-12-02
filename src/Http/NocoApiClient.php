@@ -24,7 +24,7 @@ class NocoApiClient
     {
         return Http::baseUrl($this->baseUrl)
             ->withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiToken,
+                'xc-token' => $this->apiToken,
             ])
             ->retry(3, 100)
             ->throw(function ($response, $e) {
