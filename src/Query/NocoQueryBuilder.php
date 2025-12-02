@@ -26,9 +26,9 @@ class NocoQueryBuilder extends Builder
         $results = $this->connection->getClient()->list($this->from, $params);
 
         // NocoDB list response structure: { "list": [...], "pageInfo": {...} }
-        // Or if using /rows, it might return just the array or { "list": ... }
-        // Let's assume standard NocoDB v2 response for /records or /rows usually contains 'list'.
-        // But if I used /rows, I need to be sure.
+        // Or if using /records, it might return just the array or { "list": ... }
+        // Let's assume standard NocoDB v2 response for /records or /records usually contains 'list'.
+        // But if I used /records, I need to be sure.
         // User example doesn't specify response format, but standard is { list: [], pageInfo: {} }
 
         $rows = $results['list'] ?? $results; // Fallback if it returns direct array
