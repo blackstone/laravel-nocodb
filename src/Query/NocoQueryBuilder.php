@@ -67,6 +67,9 @@ class NocoQueryBuilder extends Builder
         // But if I used /records, I need to be sure.
         // User example doesn't specify response format, but standard is { list: [], pageInfo: {} }
 
+        //todo: improve it.
+        $this->pageInfo = $results['pageInfo'] ?? [];
+
         $rows = $results['list'] ?? $results; // Fallback if it returns direct array
 
         return collect($rows);
