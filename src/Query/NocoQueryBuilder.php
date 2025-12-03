@@ -4,6 +4,7 @@ namespace BlackstonePro\NocoDB\Query;
 
 use BlackstonePro\NocoDB\Connections\NocoConnection;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 
@@ -13,6 +14,41 @@ class NocoQueryBuilder extends Builder
      * @var NocoConnection
      */
     public $connection;
+
+    public $pageInfo = [];
+
+    public function getCountForPagination($columns = ['*'])
+    {
+        $pageInfo = $this->runPaginationCountQuery($columns);
+
+        return $pageInfo['totalRows'] ?? 0;
+    }
+
+    protected function runPaginationCountQuery($columns = ['*'])
+    {
+        if ($this->groups || $this->havings) {
+            $clone = $this->cloneForPaginationCount();
+
+            if (is_null($clone->columns) && ! empty($this->joins)) {
+                $clone->select($this->from.'.*');
+            }
+
+            return $this->newQuery()
+                ->from(new Expression('('.$clone->toSql().') as '.$this->grammar->wrap('aggregate_table')))
+                ->mergeBindings($clone)
+                ->setAggregate('count', $this->withoutSelectAliases($columns))
+                ->get()->all();
+        }
+
+        $without = $this->unions ? ['unionOrders', 'unionLimit', 'unionOffset'] : ['columns', 'orders', 'limit', 'offset'];
+
+        $clone = $this->cloneWithout($without)
+            ->cloneWithoutBindings($this->unions ? ['unionOrder'] : ['select', 'order'])
+            ->setAggregate('count', $this->withoutSelectAliases($columns));
+        $rows = $clone->get();
+
+        return $clone->pageInfo;
+    }
 
     /**
      * Execute the query as a "select" statement.
@@ -163,10 +199,10 @@ class NocoQueryBuilder extends Builder
         if ($this->orders) {
             $sorts = [];
             foreach ($this->orders as $order) {
-                $direction = $order['direction'] === 'asc' ? 'asc' : 'desc';
-                $sorts[] = ['column' => $order['column'], 'direction' => $direction];
+                $direction = $order['direction'] === 'asc' ? '' : '-';
+                $sorts[] = $direction.$order['column'];
             }
-            $params['sort'] = json_encode($sorts);
+            $params['sort'] = implode(',', $sorts);
         }
 
         // Filters
