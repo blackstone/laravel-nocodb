@@ -4,6 +4,21 @@ namespace BlackstonePro\NocoDB\Traits;
 
 trait NocoModelTrait
 {
+    public function getCreatedAtColumn()
+    {
+        return 'CreatedAt';
+    }
+
+    /**
+     * Get the name of the "updated at" column.
+     *
+     * @return string|null
+     */
+    public function getUpdatedAtColumn()
+    {
+        return 'UpdatedAt';
+    }
+
     /**
      * Get the database connection for the model.
      *
