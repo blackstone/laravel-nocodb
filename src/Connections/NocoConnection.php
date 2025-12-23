@@ -52,7 +52,7 @@ class NocoConnection extends Connection
     {
         // We can return a generic Grammar or a custom one if needed.
         // For now, generic is fine as we won't use it for SQL generation.
-        return new Grammar;
+        return new Grammar($this);
     }
 
     /**
