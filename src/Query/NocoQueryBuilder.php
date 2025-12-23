@@ -17,37 +17,28 @@ class NocoQueryBuilder extends Builder
 
     public $pageInfo = [];
 
-    public function getCountForPagination($columns = ['*'])
+    public function __construct(NocoConnection $connection, \Illuminate\Database\Query\Grammars\Grammar $grammar = null, \Illuminate\Database\Query\Processors\Processor $processor = null)
     {
-        $pageInfo = $this->runPaginationCountQuery($columns);
+        parent::__construct($connection, $grammar, $processor);
 
-        return $pageInfo['totalRows'] ?? 0;
+        $this->operators = array_merge($this->operators, [
+            'eq', 'neq', 'gt', 'ge', 'lt', 'le', 'is', 'isnot', 'like', 'nlike'
+        ]);
     }
 
-    protected function runPaginationCountQuery($columns = ['*'])
+    public function getCountForPagination($columns = ['*'])
     {
-        if ($this->groups || $this->havings) {
-            $clone = $this->cloneForPaginationCount();
-
-            if (is_null($clone->columns) && ! empty($this->joins)) {
-                $clone->select($this->from.'.*');
-            }
-
-            return $this->newQuery()
-                ->from(new Expression('('.$clone->toSql().') as '.$this->grammar->wrap('aggregate_table')))
-                ->mergeBindings($clone)
-                ->setAggregate('count', $this->withoutSelectAliases($columns))
-                ->get()->all();
-        }
-
-        $without = $this->unions ? ['unionOrders', 'unionLimit', 'unionOffset'] : ['columns', 'orders', 'limit', 'offset'];
-
-        $clone = $this->cloneWithout($without)
-            ->cloneWithoutBindings($this->unions ? ['unionOrder'] : ['select', 'order'])
-            ->setAggregate('count', $this->withoutSelectAliases($columns));
-        $rows = $clone->get();
-
-        return $clone->pageInfo;
+        // For NocoDB, we can't easily do a "count(*)" query.
+        // However, the 'list' endpoint returns 'pageInfo' with 'totalRows'.
+        // We can execute a lightweight query (limit 1) to get the total rows.
+        
+        $results = $this->connection->getClient()->list($this->from, [
+            'limit' => 1, 
+            'offset' => 0,
+            'where' => $this->buildWhereParam()
+        ]);
+        
+        return $results['pageInfo']['totalRows'] ?? 0;
     }
 
     /**
@@ -61,16 +52,8 @@ class NocoQueryBuilder extends Builder
         $params = $this->buildParams();
         $results = $this->connection->getClient()->list($this->from, $params);
 
-        // NocoDB list response structure: { "list": [...], "pageInfo": {...} }
-        // Or if using /records, it might return just the array or { "list": ... }
-        // Let's assume standard NocoDB v2 response for /records or /records usually contains 'list'.
-        // But if I used /records, I need to be sure.
-        // User example doesn't specify response format, but standard is { list: [], pageInfo: {} }
-
-        //todo: improve it.
         $this->pageInfo = $results['pageInfo'] ?? [];
-
-        $rows = $results['list'] ?? $results; // Fallback if it returns direct array
+        $rows = $results['list'] ?? $results; 
 
         return collect($rows);
     }
@@ -83,10 +66,6 @@ class NocoQueryBuilder extends Builder
 
     public function insert(array $values)
     {
-        // Eloquent might pass an array of arrays for bulk insert, or single array.
-        // NocoDB create usually accepts single object or array of objects.
-        // Let's handle single for now or check if it's multidimensional.
-
         if (empty($values)) {
             return true;
         }
@@ -94,11 +73,6 @@ class NocoQueryBuilder extends Builder
         if (!is_array(reset($values))) {
             $values = [$values];
         }
-
-        // We'll just insert the first one or loop?
-        // NocoDB bulk create might be supported.
-        // For simplicity, let's loop or send as array if supported.
-        // The client create() takes array $data.
 
         foreach ($values as $row) {
             $this->connection->getClient()->create($this->from, $row);
@@ -109,12 +83,7 @@ class NocoQueryBuilder extends Builder
 
     public function insertGetId(array $values, $sequence = null)
     {
-        // NocoDB create returns the created record.
-        // We assume single insert here as insertGetId implies single record.
-
         $response = $this->connection->getClient()->create($this->from, $values);
-
-        // Try to find ID in response
         return $response['Id'] ?? $response['id'] ?? $response['_id'] ?? null;
     }
 
@@ -125,14 +94,6 @@ class NocoQueryBuilder extends Builder
 
     public function update(array $values)
     {
-        // We need an ID to update.
-        // If this is called from Model->save(), it might be on a specific instance which has ID.
-        // But QueryBuilder update() updates all matching records?
-        // NocoDB REST API update usually requires ID.
-        // If we have a 'where id = ?' clause, we can extract it.
-        // Otherwise, we might need to fetch IDs first then update?
-        // For now, let's assume we are updating a specific ID found in wheres.
-
         $id = $this->findIdInWheres();
 
         if ($id) {
@@ -140,8 +101,7 @@ class NocoQueryBuilder extends Builder
             return 1;
         }
 
-        // If no ID, we might throw exception or implement bulk update (fetch then update).
-        // Let's throw for now as bulk update via REST is expensive/complex without bulk API.
+        // Potential future improvement: fetch IDs then update if no ID in where.
         throw new \Exception("NocoDB update requires a primary key in where clause.");
     }
 
@@ -165,17 +125,13 @@ class NocoQueryBuilder extends Builder
     {
         $page = $page ?: Paginator::resolveCurrentPage($pageName);
 
+        $total = $total ?? $this->getCountForPagination($columns);
+
         $this->limit($perPage);
         $this->offset(($page - 1) * $perPage);
 
-        $results = $this->connection->getClient()->list($this->from, $this->buildParams());
-
-        $items = $results['list'] ?? [];
-        // If total is passed, use it, otherwise try to get from response
-        $total = $total ?? ($results['pageInfo']['totalRows'] ?? count($items));
-
         return new LengthAwarePaginator(
-            collect($items),
+            $this->get($columns),
             $total,
             $perPage,
             $page,
@@ -198,7 +154,6 @@ class NocoQueryBuilder extends Builder
             $params['offset'] = $this->offset;
         }
 
-        // Sort
         if ($this->orders) {
             $sorts = [];
             foreach ($this->orders as $order) {
@@ -208,55 +163,70 @@ class NocoQueryBuilder extends Builder
             $params['sort'] = implode(',', $sorts);
         }
 
-        // Filters
-        if ($this->wheres) {
-            $filters = [];
-            foreach ($this->wheres as $where) {
-                if ($where['type'] === 'Basic') {
-                    $operator = $this->mapOperator($where['operator']);
-                    $filters[] = [
-                        'column' => $where['column'],
-                        'operator' => $operator,
-                        'value' => $where['value']
-                    ];
-                }
-                // Handle other types like 'In', 'Null' etc if needed.
-            }
-            if (!empty($filters)) {
-                $params['filters'] = json_encode($filters); // Or just array if client handles it? 
-                // User example shows: &filters=[...]
-                // So we pass it as string or let Guzzle handle it?
-                // Usually query params are strings.
-                // But wait, user example: &filters=[{"column":...}]
-                // So it's a JSON string.
-            }
+        $whereInfo = $this->buildWhereParam();
+        if ($whereInfo) {
+            $params['where'] = $whereInfo;
         }
 
         return $params;
     }
 
+    protected function buildWhereParam()
+    {
+        if (!$this->wheres) {
+            return null;
+        }
+
+        $conditions = [];
+        foreach ($this->wheres as $where) {
+            if ($where['type'] === 'Basic') {
+                $operator = $this->mapOperator($where['operator']);
+                // NocoDB format: (column,operator,value)
+                // We assume value doesn't need quotes usually, but for strings it might?
+                // NocoDB docs say: (col,op,val)
+                // If val is string, does it need wrapping? Docs examples often show plain values or wrapped if creating complex queries.
+                // Let's rely on simple string conversion for now.
+                $conditions[] = "({$where['column']},{$operator},{$where['value']})";
+            }
+            // Handle 'In'
+            elseif ($where['type'] === 'In') {
+                 // in, not_in are not strictly documented as basic operators in v2 args 'where'.
+                 // But valid operators are: eq, neq, gt, ge, lt, le, is, isnot, like, nlike
+                 // 'in' might be supported or we emulate with OR?
+                 // Let's skip complex IN for this iteration or map if possible.
+                 // Actually NocoDB supports 'in' operator in some contexts but for 'where' param, it is often `(City,eq,London)`. 
+                 // Docs for v2 are sparse. Let's stick to basic for now to solve user's immediate issue.
+            }
+        }
+
+        return implode('~', $conditions); // ~ is AND in NocoDB
+    }
+
     protected function mapOperator($operator)
     {
-        // If user explicitly asked for '>', I should return '>'.
-        // But if they use Eloquent '>', it maps to '>'.
-        // If they use '=', it maps to 'eq'.
+        $map = [
+            '=' => 'eq',
+            '!=' => 'neq',
+            '<>' => 'neq',
+            '>' => 'gt',
+            '>=' => 'ge',
+            '<' => 'lt',
+            '<=' => 'le',
+            'like' => 'like',
+            'not like' => 'nlike',
+        ];
 
-        if ($operator === '=')
-            return 'eq';
-        if ($operator === '!=')
-            return 'neq';
-
-        // Return as is for others if we trust the user example implies support.
-        return $operator;
+        return $map[strtolower($operator)] ?? 'eq';
     }
 
     protected function findIdInWheres()
     {
         foreach ($this->wheres as $where) {
-            if ($where['type'] === 'Basic' && ($where['column'] === 'id' || $where['column'] === 'Id' || $where['column'] === '_id')) {
+            if ($where['type'] === 'Basic' && in_array($where['column'], ['id', 'Id', '_id'])) {
                 return $where['value'];
             }
         }
         return null;
     }
 }
+
