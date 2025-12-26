@@ -45,7 +45,7 @@ class NocoQueryBuilderTest extends TestCase
             ->once()
             ->with('leads', [
                 'limit' => 1,
-                'where' => '(Id,eq,"1")'
+                'where' => '(Id,eq,1)' // Number 1, not quoted
             ])
             ->andReturn(['list' => [['Id' => 1, 'name' => 'Test']], 'pageInfo' => ['totalRows' => 1]]);
 
@@ -66,7 +66,7 @@ class NocoQueryBuilderTest extends TestCase
             ->once()
             ->with('leads', [
                 'limit' => 1,
-                'where' => '(Id,eq,"1")' // Expecting 'Id' not 'leads.Id'
+                'where' => '(Id,eq,1)' // Expecting 'Id' not 'leads.Id', number unquoted
             ])
             ->andReturn(['list' => [['Id' => 1]], 'pageInfo' => ['totalRows' => 1]]);
 

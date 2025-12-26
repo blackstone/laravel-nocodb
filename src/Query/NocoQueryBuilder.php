@@ -189,10 +189,18 @@ class NocoQueryBuilder extends Builder
                 // let's urlencode the value so special chars inside it don't break the syntax.
                 // The client will put this raw string into the URL query.
                 $column = $this->stripTablePrefix($where['column']);
-                // Wrap value in quotes to ensure NocoDB parser recognizes the boundary correctly.
-                // We might need to escape double quotes inside the value if present.
-                $value = str_replace('"', '\"', $where['value']);
-                $conditions[] = "({$column},{$operator},\"{$value}\")";
+                
+                $value = $where['value'];
+                if (is_numeric($value)) {
+                    // Do not quote numbers to avoid 22P02 errors in Postgres
+                } elseif (is_bool($value)) {
+                    $value = $value ? 'true' : 'false';
+                } else {
+                    // Quote strings and escape internal quotes
+                    $value = '"' . str_replace('"', '\"', $value) . '"';
+                }
+
+                $conditions[] = "({$column},{$operator},{$value})";
             }
             // Handle 'In'
             elseif ($where['type'] === 'In') {
