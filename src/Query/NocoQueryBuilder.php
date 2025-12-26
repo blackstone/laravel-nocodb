@@ -53,15 +53,16 @@ class NocoQueryBuilder extends Builder
         $results = $this->connection->getClient()->list($this->from, $params);
 
         $this->pageInfo = $results['pageInfo'] ?? [];
-        $rows = $results['list'] ?? $results; 
+        $rows = $results['list'] ?? $results;
 
-        return collect($rows);
+        return collect($rows)->map(function ($row) {
+            return (object) $row;
+        });
     }
 
     public function find($id, $columns = ['*'])
     {
-        $result = $this->connection->getClient()->find($this->from, $id);
-        return !empty($result) ? (object) $result : null;
+        return $this->where('Id', $id)->first($columns);
     }
 
     public function insert(array $values)

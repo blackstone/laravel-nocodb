@@ -2,10 +2,17 @@
     "name": "blackstone/laravel-nocodb",
     "description": "NocoDB Eloquent Driver for Laravel",
     "license": "MIT",
+    "keywords": [
+        "laravel",
+        "database",
+        "eloquent",
+        "nocodb",
+        "api"
+    ],
     "authors": [
         {
-            "name": "Developer",
-            "email": "dev@example.com"
+            "name": "Roma Kazansky",
+            "email": "dev@blackstone.pro"
         }
     ],
     "require": {

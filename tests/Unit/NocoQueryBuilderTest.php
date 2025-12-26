@@ -38,13 +38,16 @@ class NocoQueryBuilderTest extends TestCase
             ->get();
     }
 
-    public function test_find_calls_client_find()
+    public function test_find_calls_list_with_filter()
     {
         $client = Mockery::mock(NocoApiClient::class);
-        $client->shouldReceive('find')
+        $client->shouldReceive('list')
             ->once()
-            ->with('leads', 1)
-            ->andReturn(['id' => 1]);
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(Id,eq,1)'
+            ])
+            ->andReturn(['list' => [['Id' => 1, 'name' => 'Test']], 'pageInfo' => ['totalRows' => 1]]);
 
         $connection = Mockery::mock(NocoConnection::class);
         $connection->shouldReceive('getClient')->andReturn($client);
@@ -52,7 +55,8 @@ class NocoQueryBuilderTest extends TestCase
         $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
         $builder->from('leads');
 
-        $builder->find(1);
+        $result = $builder->find(1);
+        $this->assertEquals(1, $result->Id);
     }
 
     public function test_get_generates_correct_nocodb_params()
