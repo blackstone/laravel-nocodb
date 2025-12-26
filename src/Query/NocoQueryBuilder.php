@@ -186,9 +186,11 @@ class NocoQueryBuilder extends Builder
                 // We assume value doesn't need quotes usually, but for strings it might?
                 // NocoDB docs say: (col,op,val)
                 // If val is string, does it need wrapping? Docs examples often show plain values or wrapped if creating complex queries.
-                // Let's rely on simple string conversion for now.
+                // let's urlencode the value so special chars inside it don't break the syntax.
+                // The client will put this raw string into the URL query.
                 $column = $this->stripTablePrefix($where['column']);
-                $conditions[] = "({$column},{$operator},{$where['value']})";
+                $value = urlencode($where['value']);
+                $conditions[] = "({$column},{$operator},{$value})";
             }
             // Handle 'In'
             elseif ($where['type'] === 'In') {

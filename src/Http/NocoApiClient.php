@@ -42,19 +42,26 @@ class NocoApiClient
      */
     public function list(string $table, array $params = []): array
     {
-        // NocoDB v2 API structure: /api/v2/tables/{tableId}/records
-        // Or via project: /api/v1/db/data/v1/{projectName}/{tableName}/views/{viewName} ?
-        // The user request says: GET /api/v2/tables/leads/records
-        // So we assume we are using v2 API and $table is the Table ID or Name if supported.
-        // If $table is a name, we might need to know the Table ID or use the project-based API.
-        // Let's assume $table is the Table ID or the API supports table names in some context.
-        // Actually, for v2, it's usually /api/v2/tables/{tableId}/records (or records).
-        // User example: GET /api/v2/tables/leads/records
+        // Extract 'where' param to handle its encoding manually.
+        // Guzzle encodes everything, but NocoDB expects '(', ')', ',', '~' to be unencoded in the 'where' query param.
+        $where = null;
+        if (isset($params['where'])) {
+            $where = $params['where'];
+            unset($params['where']);
+        }
 
-        // Let's try to follow the user example path.
-        // If the user provides 'leads' as table, we construct the URL.
-
-        return $this->client()->get("/api/v2/tables/{$table}/records", $params)->json();
+        // Construct absolute URL (without query)
+        $url = rtrim($this->baseUrl, '/') . "/api/v2/tables/{$table}/records";
+        
+        // Build full query string manually.
+        // We handle 'where' raw, and other params via http_build_query to respect standard encoding.
+        $queryString = http_build_query($params);
+        if ($where) {
+            $queryString .= ($queryString ? '&' : '') . "where={$where}";
+        }
+        
+        // Pass query as string to get() to bypass encoding issues.
+        return $this->client()->get($url, $queryString)->json();
     }
 
     public function find(string $table, $id): array

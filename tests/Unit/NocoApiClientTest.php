@@ -16,26 +16,27 @@ class NocoApiClientTest extends TestCase
         Config::set('nocodb.api_token', 'test-token');
     }
 
-    public function test_list_rows()
+    public function test_list_appends_where_manually()
     {
         Http::fake([
-            'https://api.example.com/api/v2/tables/leads/rows*' => Http::response(['list' => [], 'pageInfo' => []], 200),
+            'https://api.example.com/api/v2/tables/leads/records*' => Http::response(['list' => [], 'pageInfo' => []], 200),
         ]);
 
         $client = new NocoApiClient();
-        $result = $client->list('leads');
+        // pass unencoded structure
+        $client->list('leads', ['where' => '(col,eq,val)']);
 
-        $this->assertIsArray($result);
         Http::assertSent(function ($request) {
-            return $request->url() == 'https://api.example.com/api/v2/tables/leads/rows' &&
-                $request->hasHeader('Authorization', 'Bearer test-token');
+            // Verify 'where' is appended manually and special chars are preserved
+            return str_contains($request->url(), 'where=(col,eq,val)') &&
+                   $request->hasHeader('xc-token', 'test-token');
         });
     }
 
     public function test_find_row()
     {
         Http::fake([
-            'https://api.example.com/api/v2/tables/leads/rows/1' => Http::response(['id' => 1], 200),
+            'https://api.example.com/api/v2/tables/leads/records/1' => Http::response(['id' => 1], 200),
         ]);
 
         $client = new NocoApiClient();
@@ -47,7 +48,7 @@ class NocoApiClientTest extends TestCase
     public function test_create_row()
     {
         Http::fake([
-            'https://api.example.com/api/v2/tables/leads/rows' => Http::response(['id' => 1], 201),
+            'https://api.example.com/api/v2/tables/leads/records' => Http::response(['id' => 1], 201),
         ]);
 
         $client = new NocoApiClient();

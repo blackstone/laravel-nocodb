@@ -143,4 +143,24 @@ class NocoQueryBuilderTest extends TestCase
         $this->assertEquals(100, $paginator->total());
         $this->assertEquals(25, $paginator->count());
     }
+
+    public function test_list_encodes_values_in_where()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(name,eq,John+Doe)' // "John Doe" encoded
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->where('name', 'John Doe')->first();
+    }
 }
