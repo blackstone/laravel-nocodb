@@ -59,6 +59,27 @@ class NocoQueryBuilderTest extends TestCase
         $this->assertEquals(1, $result->Id);
     }
 
+    public function test_list_strips_table_qualifier_from_where_column()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(Id,eq,1)' // Expecting 'Id' not 'leads.Id'
+            ])
+            ->andReturn(['list' => [['Id' => 1]], 'pageInfo' => ['totalRows' => 1]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        // Simulate Eloquent's whereKey() which uses qualified column
+        $builder->where('leads.Id', 1)->first();
+    }
+
     public function test_get_generates_correct_nocodb_params()
     {
         $client = Mockery::mock(NocoApiClient::class);

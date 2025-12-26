@@ -187,7 +187,8 @@ class NocoQueryBuilder extends Builder
                 // NocoDB docs say: (col,op,val)
                 // If val is string, does it need wrapping? Docs examples often show plain values or wrapped if creating complex queries.
                 // Let's rely on simple string conversion for now.
-                $conditions[] = "({$where['column']},{$operator},{$where['value']})";
+                $column = $this->stripTablePrefix($where['column']);
+                $conditions[] = "({$column},{$operator},{$where['value']})";
             }
             // Handle 'In'
             elseif ($where['type'] === 'In') {
@@ -201,6 +202,14 @@ class NocoQueryBuilder extends Builder
         }
 
         return implode('~', $conditions); // ~ is AND in NocoDB
+    }
+
+    protected function stripTablePrefix($column)
+    {
+        if (strpos($column, '.') !== false) {
+            return explode('.', $column)[1];
+        }
+        return $column;
     }
 
     protected function mapOperator($operator)
