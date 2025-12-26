@@ -21,7 +21,7 @@ class NocoQueryBuilderTest extends TestCase
                 'limit' => 10,
                 'offset' => 0,
                 'sort' => '-age',
-                'where' => '(status,eq,active)'
+                'where' => '(status,eq,"active")'
             ])
             ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
 
@@ -45,7 +45,7 @@ class NocoQueryBuilderTest extends TestCase
             ->once()
             ->with('leads', [
                 'limit' => 1,
-                'where' => '(Id,eq,1)'
+                'where' => '(Id,eq,"1")'
             ])
             ->andReturn(['list' => [['Id' => 1, 'name' => 'Test']], 'pageInfo' => ['totalRows' => 1]]);
 
@@ -66,7 +66,7 @@ class NocoQueryBuilderTest extends TestCase
             ->once()
             ->with('leads', [
                 'limit' => 1,
-                'where' => '(Id,eq,1)' // Expecting 'Id' not 'leads.Id'
+                'where' => '(Id,eq,"1")' // Expecting 'Id' not 'leads.Id'
             ])
             ->andReturn(['list' => [['Id' => 1]], 'pageInfo' => ['totalRows' => 1]]);
 
@@ -89,7 +89,7 @@ class NocoQueryBuilderTest extends TestCase
                 'limit' => 10,
                 'offset' => 0,
                 'sort' => '-age',
-                'where' => '(status,eq,active)'
+                'where' => '(status,eq,"active")'
             ])
             ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
 
@@ -116,7 +116,7 @@ class NocoQueryBuilderTest extends TestCase
             ->with('news', [
                 'limit' => 1,
                 'offset' => 0,
-                'where' => '(category,eq,all)'
+                'where' => '(category,eq,"all")'
             ])
             ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 100]]);
 
@@ -126,7 +126,7 @@ class NocoQueryBuilderTest extends TestCase
             ->with('news', [
                 'limit' => 25,
                 'offset' => 0, // Page 1
-                'where' => '(category,eq,all)' 
+                'where' => '(category,eq,"all")' 
             ])
             ->andReturn(['list' => array_fill(0, 25, ['id' => 1]), 'pageInfo' => ['totalRows' => 100]]);
 
@@ -151,7 +151,7 @@ class NocoQueryBuilderTest extends TestCase
             ->once()
             ->with('leads', [
                 'limit' => 1,
-                'where' => '(name,eq,John+Doe)' // "John Doe" encoded
+                'where' => '(name,eq,"John Doe")' // Quoted, no manual encoding
             ])
             ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
 
