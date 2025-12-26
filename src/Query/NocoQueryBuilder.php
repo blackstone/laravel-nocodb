@@ -174,46 +174,50 @@ class NocoQueryBuilder extends Builder
 
     protected function buildWhereParam()
     {
-        if (!$this->wheres) {
+        return $this->compileWheres($this->wheres);
+    }
+
+    protected function compileWheres($wheres)
+    {
+        if (!$wheres) {
             return null;
         }
 
-        $conditions = [];
-        foreach ($this->wheres as $where) {
+        $sql = '';
+
+        foreach ($wheres as $i => $where) {
+            $condition = '';
+
             if ($where['type'] === 'Basic') {
                 $operator = $this->mapOperator($where['operator']);
-                // NocoDB format: (column,operator,value)
-                // We assume value doesn't need quotes usually, but for strings it might?
-                // NocoDB docs say: (col,op,val)
-                // If val is string, does it need wrapping? Docs examples often show plain values or wrapped if creating complex queries.
-                // let's urlencode the value so special chars inside it don't break the syntax.
-                // The client will put this raw string into the URL query.
                 $column = $this->stripTablePrefix($where['column']);
                 
                 $value = $where['value'];
-                if (is_numeric($value)) {
-                    // Do not quote numbers to avoid 22P02 errors in Postgres
-                } elseif (is_bool($value)) {
+                if (is_bool($value)) {
                     $value = $value ? 'true' : 'false';
-                } else {
-                    // Quote strings and escape internal quotes
-                    $value = '"' . str_replace('"', '\"', $value) . '"';
                 }
-
-                $conditions[] = "({$column},{$operator},{$value})";
+                // We do NOT quote strings based on user request "should be: (Id,eq,123)~and(type,eq,vps)"
+                // Assuming explicit operators resolve parser ambiguity.
+                
+                $condition = "({$column},{$operator},{$value})";
+            } elseif ($where['type'] === 'Nested') {
+                $nested = $this->compileWheres($where['query']->wheres);
+                if ($nested) {
+                    $condition = "({$nested})";
+                }
             }
-            // Handle 'In'
-            elseif ($where['type'] === 'In') {
-                 // in, not_in are not strictly documented as basic operators in v2 args 'where'.
-                 // But valid operators are: eq, neq, gt, ge, lt, le, is, isnot, like, nlike
-                 // 'in' might be supported or we emulate with OR?
-                 // Let's skip complex IN for this iteration or map if possible.
-                 // Actually NocoDB supports 'in' operator in some contexts but for 'where' param, it is often `(City,eq,London)`. 
-                 // Docs for v2 are sparse. Let's stick to basic for now to solve user's immediate issue.
+
+            if ($condition) {
+                // Add logical operator if not the first element
+                if ($i > 0) {
+                    $boolean = isset($where['boolean']) ? strtolower($where['boolean']) : 'and';
+                    $sql .= "~{$boolean}";
+                }
+                $sql .= $condition;
             }
         }
 
-        return implode('~', $conditions); // ~ is AND in NocoDB
+        return $sql;
     }
 
     protected function stripTablePrefix($column)
