@@ -143,12 +143,24 @@ class NocoQueryBuilder extends Builder
         );
     }
 
+    public $shuffle = false;
+
+    public function inRandomOrder($seed = '')
+    {
+        $this->shuffle = true;
+        return $this;
+    }
+
     protected function buildParams(): array
     {
         $params = [];
 
         if ($this->limit) {
             $params['limit'] = $this->limit;
+        }
+
+        if ($this->shuffle) {
+            $params['shuffle'] = 1;
         }
 
         if (!is_null($this->offset)) {

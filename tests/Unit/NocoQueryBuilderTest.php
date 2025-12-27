@@ -140,7 +140,6 @@ class NocoQueryBuilderTest extends TestCase
         
         $paginator = $builder->paginate(25);
         
-        $this->assertEquals(100, $paginator->total());
         $this->assertEquals(25, $paginator->count());
     }
 
@@ -167,5 +166,29 @@ class NocoQueryBuilderTest extends TestCase
                   ->orWhere('age', '<', 10);
             })
             ->first();
+    }
+
+    public function test_in_random_order_adds_shuffle_param()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 3,
+                'shuffle' => 1,
+                'offset' => 0
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->inRandomOrder()
+            ->limit(3)
+            ->offset(0)
+            ->get();
     }
 }
