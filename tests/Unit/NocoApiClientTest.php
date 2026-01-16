@@ -52,12 +52,13 @@ class NocoApiClientTest extends TestCase
         ]);
 
         $client = new NocoApiClient();
-        $result = $client->create('leads', ['name' => 'Test']);
+        // Pass payload INCLUDING timestamps and ID to verify they get stripped
+        $result = $client->create('leads', ['name' => 'Test', 'CreatedAt' => '2023-01-01', 'Id' => 999]);
 
         Http::assertSent(function ($request) {
             return $request->method() == 'POST' &&
                 $request->url() == 'https://api.example.com/api/v2/tables/leads/records' &&
-                $request->data() == [['name' => 'Test']]; // Should be wrapped in array
+                $request->data() == [['name' => 'Test']]; // Timestamps and ID should be GONE
         });
 
         // Ensure it returns the single object, not the array

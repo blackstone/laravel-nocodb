@@ -6,6 +6,7 @@ use BlackstonePro\NocoDB\Exceptions\NocoDBException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 
 class NocoApiClient
 {
@@ -18,6 +19,15 @@ class NocoApiClient
         $this->baseUrl = Config::get('nocodb.api_url', 'https://app.nocodb.com');
         $this->apiToken = Config::get('nocodb.api_token', '');
         $this->project = Config::get('nocodb.project');
+
+        // Fix for common misconfiguration:
+        // If the URL is http but not local, force https to prevent 301 Redirects downgrading POST to GET.
+        if (str_starts_with($this->baseUrl, 'http://')) {
+            $host = parse_url($this->baseUrl, PHP_URL_HOST);
+            if ($host !== 'localhost' && $host !== '127.0.0.1') {
+                $this->baseUrl = str_replace('http://', 'https://', $this->baseUrl);
+            }
+        }
     }
 
     protected function client(): PendingRequest
@@ -69,12 +79,23 @@ class NocoApiClient
         return $this->client()->get("/api/v2/tables/{$table}/records/{$id}")->json();
     }
 
+    protected function cleanPayload(array $data): array
+    {
+        $restricted = ['CreatedAt', 'UpdatedAt', 'created_at', 'updated_at', 'Id', 'id', '_id'];
+        return array_diff_key($data, array_flip($restricted));
+    }
+
     public function create(string $table, array $data): array
     {
         // Detect if we're creating a single record (associative array) or bulk (list of arrays)
         $isSingle = array_keys($data) !== range(0, count($data) - 1);
 
-        $payload = $isSingle ? [$data] : $data;
+        if ($isSingle) {
+            $data = $this->cleanPayload($data);
+            $payload = [$data];
+        } else {
+            $payload = array_map([$this, 'cleanPayload'], $data);
+        }
 
         $response = $this->client()->post("/api/v2/tables/{$table}/records", $payload)->json();
 
@@ -91,6 +112,8 @@ class NocoApiClient
     {
         // NocoDB v2 Update is a PATCH to /records with a body of objects containing Id
         // Payload: [ { Id: 1, ...fields } ]
+        
+        $data = $this->cleanPayload($data);
         
         $payload = [
             array_merge(['Id' => $id], $data)
