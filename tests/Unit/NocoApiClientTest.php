@@ -45,18 +45,56 @@ class NocoApiClientTest extends TestCase
         $this->assertEquals(1, $result['id']);
     }
 
-    public function test_create_row()
+    public function test_create_row_single()
     {
         Http::fake([
-            'https://api.example.com/api/v2/tables/leads/records' => Http::response(['id' => 1], 201),
+            'https://api.example.com/api/v2/tables/leads/records' => Http::response([['id' => 1, 'name' => 'Test']], 201),
         ]);
 
         $client = new NocoApiClient();
-        $client->create('leads', ['name' => 'Test']);
+        $result = $client->create('leads', ['name' => 'Test']);
 
         Http::assertSent(function ($request) {
             return $request->method() == 'POST' &&
-                $request->data()['name'] == 'Test';
+                $request->url() == 'https://api.example.com/api/v2/tables/leads/records' &&
+                $request->data() == [['name' => 'Test']]; // Should be wrapped in array
+        });
+
+        // Ensure it returns the single object, not the array
+        $this->assertEquals(['id' => 1, 'name' => 'Test'], $result);
+    }
+
+    public function test_update_row()
+    {
+        Http::fake([
+            'https://api.example.com/api/v2/tables/leads/records' => Http::response([['Id' => 1, 'name' => 'Updated']], 200),
+        ]);
+
+        $client = new NocoApiClient();
+        $result = $client->update('leads', 1, ['name' => 'Updated']);
+
+        Http::assertSent(function ($request) {
+            return $request->method() == 'PATCH' &&
+                $request->url() == 'https://api.example.com/api/v2/tables/leads/records' &&
+                $request->data() == [['Id' => 1, 'name' => 'Updated']];
+        });
+
+        $this->assertEquals(['Id' => 1, 'name' => 'Updated'], $result);
+    }
+
+    public function test_delete_row()
+    {
+        Http::fake([
+            'https://api.example.com/api/v2/tables/leads/records' => Http::response([], 200),
+        ]);
+
+        $client = new NocoApiClient();
+        $client->delete('leads', 1);
+
+        Http::assertSent(function ($request) {
+            return $request->method() == 'DELETE' &&
+                $request->url() == 'https://api.example.com/api/v2/tables/leads/records' &&
+                $request->data() == [['Id' => 1]];
         });
     }
 }

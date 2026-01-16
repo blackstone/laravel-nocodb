@@ -71,16 +71,47 @@ class NocoApiClient
 
     public function create(string $table, array $data): array
     {
-        return $this->client()->post("/api/v2/tables/{$table}/records", $data)->json();
+        // Detect if we're creating a single record (associative array) or bulk (list of arrays)
+        $isSingle = array_keys($data) !== range(0, count($data) - 1);
+
+        $payload = $isSingle ? [$data] : $data;
+
+        $response = $this->client()->post("/api/v2/tables/{$table}/records", $payload)->json();
+
+        // If we sent a single record, return the single result (first item)
+        // NocoDB v2 returns array of created records.
+        if ($isSingle && isset($response[0])) {
+            return $response[0];
+        }
+
+        return $response;
     }
 
     public function update(string $table, $id, array $data): array
     {
-        return $this->client()->patch("/api/v2/tables/{$table}/records/{$id}", $data)->json();
+        // NocoDB v2 Update is a PATCH to /records with a body of objects containing Id
+        // Payload: [ { Id: 1, ...fields } ]
+        
+        $payload = [
+            array_merge(['Id' => $id], $data)
+        ];
+
+        $response = $this->client()->patch("/api/v2/tables/{$table}/records", $payload)->json();
+        
+        // Return single updated record if available
+        return $response[0] ?? $response;
     }
 
     public function delete(string $table, $id): void
     {
-        $this->client()->delete("/api/v2/tables/{$table}/records/{$id}");
+        // NocoDB v2 Delete is a DELETE to /records with body: [ { Id: 1 } ]
+        // HttpClient delete() allows data as second param in some versions, 
+        // but to be safe and explicit with Body in DELETE, we might need to use send() or custom request.
+        
+        // Laravel Http client 'delete' method definition: delete(string $url, array $data = [])
+        
+        $this->client()->delete("/api/v2/tables/{$table}/records", [
+            ['Id' => $id]
+        ]);
     }
 }
