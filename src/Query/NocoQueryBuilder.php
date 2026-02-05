@@ -252,9 +252,19 @@ class NocoQueryBuilder extends Builder
             '<=' => 'le',
             'like' => 'like',
             'not like' => 'nlike',
+            'is' => 'is',
+            'is not' => 'isnot',
+            'in' => 'in',
+            'between' => 'btw',
+            'not between' => 'nbtw',
+            'isWithin' => 'isWithin',
+            'allof' => 'allof',
+            'anyof' => 'anyof',
+            'nallof' => 'nallof',
+            'nanyof' => 'nanyof',
         ];
 
-        return $map[strtolower($operator)] ?? 'eq';
+        return $map[strtolower($operator)] ?? $operator;
     }
 
     protected function findIdInWheres()
