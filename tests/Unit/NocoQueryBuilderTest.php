@@ -191,4 +191,115 @@ class NocoQueryBuilderTest extends TestCase
             ->offset(0)
             ->get();
     }
+
+    public function test_where_with_date_and_datetime()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(created_at,ge,exactDate,2026-06-17)~and(updated_at,lt,exactDate,2026-06-17 12:00:00)'
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->where('created_at', '>=', '2026-06-17')
+            ->where('updated_at', '<', '2026-06-17 12:00:00')
+            ->first();
+    }
+
+    public function test_where_with_carbon_instance()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(created_at,eq,exactDate,2026-06-17 15:30:00)'
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $date = \Illuminate\Support\Carbon::parse('2026-06-17 15:30:00');
+
+        $builder->where('created_at', '=', $date)
+            ->first();
+    }
+
+    public function test_where_null_and_not_null()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(deleted_at,is,blank)~and(status,isnot,blank)'
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->whereNull('deleted_at')
+            ->whereNotNull('status')
+            ->first();
+    }
+
+    public function test_where_in_and_not_in()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '(status,in,active,pending)~and((category,isnot,spam)~and(category,isnot,trash))'
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->whereIn('status', ['active', 'pending'])
+            ->whereNotIn('category', ['spam', 'trash'])
+            ->first();
+    }
+
+    public function test_where_between_and_not_between()
+    {
+        $client = Mockery::mock(NocoApiClient::class);
+        $client->shouldReceive('list')
+            ->once()
+            ->with('leads', [
+                'limit' => 1,
+                'where' => '((age,ge,18)~and(age,le,30))~and((price,lt,100)~or(price,gt,200))'
+            ])
+            ->andReturn(['list' => [], 'pageInfo' => ['totalRows' => 0]]);
+
+        $connection = Mockery::mock(NocoConnection::class);
+        $connection->shouldReceive('getClient')->andReturn($client);
+
+        $builder = new NocoQueryBuilder($connection, new Grammar, new Processor);
+        $builder->from('leads');
+
+        $builder->whereBetween('age', [18, 30])
+            ->whereNotBetween('price', [100, 200])
+            ->first();
+    }
 }

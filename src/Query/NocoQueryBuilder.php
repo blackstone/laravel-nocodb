@@ -189,6 +189,38 @@ class NocoQueryBuilder extends Builder
         return $this->compileWheres($this->wheres);
     }
 
+    protected function formatValue($value)
+    {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            if ($value->format('H:i:s') === '00:00:00') {
+                return 'exactDate,' . $value->format('Y-m-d');
+            }
+            return 'exactDate,' . $value->format('Y-m-d H:i:s');
+        }
+
+        if (is_string($value)) {
+            if (str_starts_with($value, 'exactDate,')) {
+                return $value;
+            }
+
+            // Regex for YYYY-MM-DD
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                return 'exactDate,' . $value;
+            }
+
+            // Regex for YYYY-MM-DD HH:MM:SS or ISO 8601
+            if (preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/', $value)) {
+                return 'exactDate,' . $value;
+            }
+        }
+
+        return $value;
+    }
+
     protected function compileWheres($wheres)
     {
         if (!$wheres) {
@@ -199,23 +231,55 @@ class NocoQueryBuilder extends Builder
 
         foreach ($wheres as $i => $where) {
             $condition = '';
+            $type = strtolower($where['type']);
 
-            if ($where['type'] === 'Basic') {
+            if ($type === 'basic') {
                 $operator = $this->mapOperator($where['operator']);
                 $column = $this->stripTablePrefix($where['column']);
-                
-                $value = $where['value'];
-                if (is_bool($value)) {
-                    $value = $value ? 'true' : 'false';
-                }
-                // We do NOT quote strings based on user request "should be: (Id,eq,123)~and(type,eq,vps)"
-                // Assuming explicit operators resolve parser ambiguity.
-                
+                $value = $this->formatValue($where['value']);
                 $condition = "({$column},{$operator},{$value})";
-            } elseif ($where['type'] === 'Nested') {
+            } elseif (in_array($type, ['date', 'month', 'day', 'year', 'time'])) {
+                $operator = $this->mapOperator($where['operator']);
+                $column = $this->stripTablePrefix($where['column']);
+                $value = $this->formatValue($where['value']);
+                $condition = "({$column},{$operator},{$value})";
+            } elseif ($type === 'nested') {
                 $nested = $this->compileWheres($where['query']->wheres);
                 if ($nested) {
                     $condition = "({$nested})";
+                }
+            } elseif ($type === 'null') {
+                $column = $this->stripTablePrefix($where['column']);
+                $condition = "({$column},is,blank)";
+            } elseif ($type === 'notnull') {
+                $column = $this->stripTablePrefix($where['column']);
+                $condition = "({$column},isnot,blank)";
+            } elseif ($type === 'in') {
+                $column = $this->stripTablePrefix($where['column']);
+                $values = array_map(fn($val) => $this->formatValue($val), $where['values']);
+                $valuesStr = implode(',', $values);
+                $condition = "({$column},in,{$valuesStr})";
+            } elseif ($type === 'notin') {
+                $column = $this->stripTablePrefix($where['column']);
+                $conditions = [];
+                foreach ($where['values'] as $val) {
+                    $formattedVal = $this->formatValue($val);
+                    $conditions[] = "({$column},isnot,{$formattedVal})";
+                }
+                if ($conditions) {
+                    $condition = implode('~and', $conditions);
+                    if (count($conditions) > 1) {
+                        $condition = "({$condition})";
+                    }
+                }
+            } elseif ($type === 'between') {
+                $column = $this->stripTablePrefix($where['column']);
+                $val1 = $this->formatValue($where['values'][0]);
+                $val2 = $this->formatValue($where['values'][1]);
+                if (!empty($where['not'])) {
+                    $condition = "(({$column},lt,{$val1})~or({$column},gt,{$val2}))";
+                } else {
+                    $condition = "(({$column},ge,{$val1})~and({$column},le,{$val2}))";
                 }
             }
 
